@@ -357,17 +357,33 @@ def _ensure_game_dir(options: dict, config: Config) -> Path:
 
     configured = config.get("game_dir")
     if config.get("game_dir_configured") and configured:
-        return Path(configured)
+        path = Path(configured)
+        if path.resolve() == app_dir().resolve():
+            # 兼容 1.0.0：旧版本把游戏文件直接放在启动器根目录。
+            target = app_dir() / ".minecraft"
+            if not target.exists():
+                target.mkdir(parents=True, exist_ok=True)
+                for name in ("versions", "libraries", "assets", "mods", "saves",
+                             "config", "resourcepacks", "shaderpacks", "logs", "options.txt"):
+                    source = path / name
+                    if source.exists():
+                        try:
+                            shutil.move(str(source), str(target / name))
+                        except OSError:
+                            pass
+            config.set("game_dir", str(target))
+            return target
+        return path
 
     ui.info(t("首次安装实例，请先确定游戏实例文件夹。",
               "First installation: choose the game instance folder."))
     answer = ui.ask(
-        t(f"是否把实例文件放在CM Launcher所在文件夹？\n  {app_dir()}\n(y/N)",
-          f"Put instance files in the launcher folder?\n  {app_dir()}\n(y/N)"),
+        t(f"是否把实例文件放在启动器文件夹下的 .minecraft？\n  {app_dir() / '.minecraft'}\n(y/N)",
+          f"Put instance files in the launcher folder's .minecraft?\n  {app_dir() / '.minecraft'}\n(y/N)"),
         "y",
     ).strip().lower()
     if answer in ("y", "yes", "是"):
-        path = app_dir()
+        path = app_dir() / ".minecraft"
     else:
         selected = pick_folder(t("选择游戏实例文件夹（将存放 versions/libraries/assets）",
                                  "Select game instance folder (versions/libraries/assets)"))
